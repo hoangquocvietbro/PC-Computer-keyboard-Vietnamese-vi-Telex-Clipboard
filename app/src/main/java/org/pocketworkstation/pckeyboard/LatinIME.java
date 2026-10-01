@@ -115,6 +115,8 @@ public class LatinIME extends InputMethodService implements
 
     public static final String PREF_SELECTED_LANGUAGES = "selected_languages";
     public static final String PREF_INPUT_LANGUAGE = "input_language";
+    public static final String PREF_VI_TELEX = "vi_telex";
+    public static final String PREF_CLIPBOARD = "clipboard_enable";
     private static final String PREF_RECORRECTION_ENABLED = "recorrection_enabled";
     static final String PREF_FULLSCREEN_OVERRIDE = "fullscreen_override";
     static final String PREF_FORCE_KEYBOARD_ON = "force_keyboard_on";
@@ -205,6 +207,11 @@ public class LatinIME extends InputMethodService implements
     private boolean mAutoCapPref;
     private boolean mAutoCapActive;
     private boolean mDeadKeysActive;
+    private boolean mViTelexEnabled;
+    private boolean mClipboardEnabled;
+    private ClipboardHistoryManager mClipHistory;
+    private ClipboardPanel mClipboardPanel;
+    private android.widget.FrameLayout mInputViewContainer;
     private boolean mQuickFixes;
     private boolean mShowSuggestions;
     private boolean mIsShowingHint;
@@ -410,6 +417,31 @@ public class LatinIME extends InputMethodService implements
         pFilter.addAction("android.intent.action.PACKAGE_REPLACED");
         pFilter.addAction("android.intent.action.PACKAGE_REMOVED");
         registerReceiver(mPluginManager, pFilter);
+
+        mClipHistory = new ClipboardHistoryManager(this);
+        mClipHistory.setListener(new ClipboardHistoryManager.Listener() {
+            @Override
+            public void onHistoryChanged() {
+                if (mClipboardPanel != null && mClipboardPanel.isPanelShowing()) {
+                    mClipboardPanel.refresh();
+                }
+            }
+        });
+        mClipHistory.startListening();
+
+        // Clipboard overlay panel (covers the keyboard, same size).
+        mClipboardPanel = new ClipboardPanel(this, mClipHistory);
+        mClipboardPanel.setListener(new ClipboardPanel.ClipboardActionListener() {
+            @Override
+            public void onPasteClip(String text) {
+                pasteClipText(text);
+            }
+            @Override
+            public void onCloseClipboardPanel() {
+                closeClipboardPanel();
+            }
+        });
+        mClipboardPanel.setVisibility(View.GONE);
 
         LatinIMEUtil.GCUtils.getInstance().reset();
         boolean tryGC = true;
@@ -660,6 +692,9 @@ public class LatinIME extends InputMethodService implements
         	unregisterReceiver(mNotificationReceiver);
             mNotificationReceiver = null;
         }
+        if (mClipHistory != null) {
+            mClipHistory.stopListening();
+        }
         super.onDestroy();
     }
 
@@ -704,7 +739,52 @@ public class LatinIME extends InputMethodService implements
         mKeyboardSwitcher.makeKeyboards(true);
         mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT, 0,
                 shouldShowVoiceButton(getCurrentInputEditorInfo()));
-        return mKeyboardSwitcher.getInputView();
+        return getInputViewContainer();
+    }
+
+    /**
+     * Wrapper holding the keyboard plus the clipboard overlay at exactly
+     * the same size, so opening clipboard never resizes the keyboard.
+     */
+    private View getInputViewContainer() {
+        if (mInputViewContainer == null) {
+            mInputViewContainer = new android.widget.FrameLayout(this);
+        } else {
+            mInputViewContainer.removeAllViews();
+        }
+        LatinKeyboardView keyboardView = mKeyboardSwitcher.getInputView();
+        if (keyboardView != null) {
+            mInputViewContainer.addView(keyboardView,
+                    new android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        }
+        if (mClipboardPanel != null) {
+            mInputViewContainer.addView(mClipboardPanel,
+                    new android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        }
+        return mInputViewContainer;
+    }
+
+    /** Re-attach keyboard + overlay after the keyboard view is recreated. */
+    void refreshInputViewContainer() {
+        setInputView(getInputViewContainer());
+        updateInputViewShown();
+        // Re-lock the overlay height (e.g. after rotation) once laid out.
+        if (mClipboardPanel != null && mClipboardPanel.isPanelShowing()) {
+            mClipboardPanel.post(new Runnable() {
+                @Override
+                public void run() {
+                    LatinKeyboardView kv = mKeyboardSwitcher.getInputView();
+                    if (kv != null && mClipboardPanel.isPanelShowing()) {
+                        int h = kv.getHeight() > 0 ? kv.getHeight() : kv.getMeasuredHeight();
+                        mClipboardPanel.setMaxHeight(h);
+                    }
+                }
+            });
+        }
     }
 
     @Override
@@ -752,6 +832,15 @@ public class LatinIME extends InputMethodService implements
             .findViewById(R.id.candidates);
             mCandidateView.setPadding(0, 0, 0, 0);
             mCandidateView.setService(this);
+            View clipboardButton =
+                    mCandidateViewContainer.findViewById(R.id.clipboard_menu_button);
+            clipboardButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showClipboardPanel();
+                }
+            });
+            updateClipboardMenuVisibility();
             setCandidatesView(mCandidateViewContainer);
         }
         // setCandidatesViewShown(true);
@@ -774,6 +863,59 @@ public class LatinIME extends InputMethodService implements
             mCandidateView = null;
         }
         resetPrediction();
+    }
+
+    /** Show clipboard history as an overlay covering keyboard + strip. */
+    public void showClipboardPanel() {
+        if (mPasswordText || mClipboardPanel == null) return;
+        mClipHistory.captureCurrentClip();
+        mClipboardPanel.refresh();
+        // Lock the panel to the current keyboard height so extra clips
+        // scroll inside instead of growing the panel.
+        LatinKeyboardView keyboardView = mKeyboardSwitcher.getInputView();
+        int keyboardHeight = keyboardView != null ? keyboardView.getHeight() : 0;
+        if (keyboardHeight <= 0 && keyboardView != null) {
+            keyboardHeight = keyboardView.getMeasuredHeight();
+        }
+        mClipboardPanel.setMaxHeight(keyboardHeight);
+        // Hide the suggestion strip window so the overlay covers everything.
+        setCandidatesViewShown(false);
+        mClipboardPanel.setVisibility(View.VISIBLE);
+        mClipboardPanel.bringToFront();
+    }
+
+    /** Hide the clipboard overlay and reveal the keyboard again. */
+    public void closeClipboardPanel() {
+        if (mClipboardPanel != null) mClipboardPanel.setVisibility(View.GONE);
+        // Restores the strip only when suggestions are enabled; otherwise
+        // this is a no-op and the strip stays hidden.
+        setCandidatesViewShown(true);
+    }
+
+    private void pasteClipText(String text) {
+        if (TextUtils.isEmpty(text)) return;
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return;
+        ic.beginBatchEdit();
+        if (mPredicting) commitTyped(ic, true);
+        ic.commitText(text, 1);
+        ic.endBatchEdit();
+        updateShiftKeyState(getCurrentInputEditorInfo());
+        TextEntryState.manualTyped(text);
+    }
+
+    private void updateClipboardMenuVisibility() {
+        if (mCandidateViewContainer == null) return;
+        View menuButton =
+                mCandidateViewContainer.findViewById(R.id.clipboard_menu_button);
+        if (menuButton == null) return;
+        menuButton.setVisibility(
+                (mClipboardEnabled && !mPasswordText) ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateClipboardCapture() {
+        if (mClipHistory == null) return;
+        mClipHistory.setCaptureEnabled(mClipboardEnabled && !mPasswordText);
     }
 
     private void resetPrediction() {
@@ -918,6 +1060,10 @@ public class LatinIME extends InputMethodService implements
         inputView.closing();
         resetPrediction();
         loadSettings();
+        updateClipboardCapture();
+        // Never show clipboard history in password fields.
+        if (mPasswordText) closeClipboardPanel();
+        else updateClipboardMenuVisibility();
         updateShiftKeyState(attribute);
 
         mPredictionOnPref = (mCorrectionMode > 0 || mShowSuggestions);
@@ -1223,6 +1369,10 @@ public class LatinIME extends InputMethodService implements
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {
         case KeyEvent.KEYCODE_BACK:
+            if (mClipboardPanel != null && mClipboardPanel.isPanelShowing()) {
+                closeClipboardPanel();
+                return true;
+            }
             if (event.getRepeatCount() == 0
                     && mKeyboardSwitcher.getInputView() != null) {
                 if (mKeyboardSwitcher.getInputView().handleBack()) {
@@ -1879,6 +2029,9 @@ public class LatinIME extends InputMethodService implements
         case LatinKeyboardView.KEYCODE_OPTIONS_LONGPRESS:
             onOptionKeyLongPressed();
             break;
+        case LatinKeyboardView.KEYCODE_CLIPBOARD:
+            showClipboardPanel();
+            break;
         case LatinKeyboardView.KEYCODE_COMPOSE:
             mComposeMode = !mComposeMode;
             mComposeBuffer.clear();
@@ -1955,6 +2108,13 @@ public class LatinIME extends InputMethodService implements
             }
             if (primaryCode != ASCII_ENTER) {
                 mJustAddedAutoSpace = false;
+            }
+            if (tryVietnameseTelex(primaryCode, keyCodes)) {
+                // Cancel the just reverted state
+                mJustRevertedSeparator = null;
+                mKeyboardSwitcher.onKey(primaryCode);
+                mEnteredText = null;
+                return;
             }
             RingCharBuffer.getInstance().push((char) primaryCode, x, y);
             if (isWordSeparator(primaryCode)) {
@@ -2166,6 +2326,70 @@ public class LatinIME extends InputMethodService implements
         if (force || TextEntryState.isCorrecting()) {
             getCurrentInputConnection().finishComposingText();
             clearSuggestions();
+        }
+    }
+
+    private boolean isVietnameseTelexActive() {
+        if (!mViTelexEnabled || mLanguageSwitcher == null) return false;
+        String lang = mLanguageSwitcher.getInputLanguage();
+        if (lang == null || lang.length() < 2) return false;
+        return lang.substring(0, 2).equalsIgnoreCase("vi");
+    }
+
+    /**
+     * Try a Telex rewrite for the just-typed key. Returns true when the key
+     * was consumed as a Telex control key (mark/horn/tone/undo).
+     */
+    private boolean tryVietnameseTelex(int primaryCode, int[] keyCodes) {
+        if (!isVietnameseTelexActive()) return false;
+        if (mModCtrl || mModAlt || mModMeta) return false;
+        if (mComposeMode) return false;
+        if (primaryCode <= 0 || primaryCode >= 0x110000) return false;
+        char c = (char) primaryCode;
+        if (!VietnameseTelex.isTrigger(c)) return false;
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return false;
+
+        if (mPredicting && mComposing.length() > 0) {
+            String cur = mComposing.toString();
+            VietnameseTelex.Result r = VietnameseTelex.process(cur, c);
+            if (!r.transformed) return false;
+            // Rebuild composing + word buffers around the new syllable.
+            int oldLen = mComposing.length();
+            int newLen = r.text.length();
+            mComposing.setLength(0);
+            mComposing.append(r.text);
+            for (int i = 0; i < oldLen; i++) mWord.deleteLast();
+            for (int i = 0; i < newLen; i++) {
+                int ch = r.text.charAt(i);
+                mWord.add(ch, new int[]{ch});
+            }
+            ic.setComposingText(mComposing, 1);
+            postUpdateSuggestions();
+            updateShiftKeyState(getCurrentInputEditorInfo());
+            TextEntryState.typedCharacter(c, false);
+            return true;
+        } else {
+            // Non-predicting path: rewrite the syllable already committed.
+            CharSequence before = ic.getTextBeforeCursor(24, 0);
+            if (before == null || before.length() == 0) return false;
+            String beforeStr = before.toString();
+            int start = beforeStr.length();
+            String seps = mWordSeparators != null ? mWordSeparators : " \n";
+            while (start > 0 && seps.indexOf(beforeStr.charAt(start - 1)) < 0) {
+                start--;
+            }
+            String syll = beforeStr.substring(start);
+            if (syll.length() == 0) return false;
+            VietnameseTelex.Result r = VietnameseTelex.process(syll, c);
+            if (!r.transformed) return false;
+            ic.beginBatchEdit();
+            ic.deleteSurroundingText(syll.length(), 0);
+            ic.commitText(r.text, 1);
+            ic.endBatchEdit();
+            updateShiftKeyState(getCurrentInputEditorInfo());
+            TextEntryState.typedCharacter(c, false);
+            return true;
         }
     }
 
@@ -2915,6 +3139,14 @@ public class LatinIME extends InputMethodService implements
             mVolDownAction = sharedPreferences.getString(PREF_VOL_DOWN, res.getString(R.string.default_vol_down));
         } else if (PREF_VIBRATE_LEN.equals(key)) {
             mVibrateLen = getPrefInt(sharedPreferences, PREF_VIBRATE_LEN, getResources().getString(R.string.vibrate_duration_ms));
+        } else if (PREF_VI_TELEX.equals(key)) {
+            mViTelexEnabled = sharedPreferences.getBoolean(
+                    PREF_VI_TELEX, res.getBoolean(R.bool.default_vi_telex));
+        } else if (PREF_CLIPBOARD.equals(key)) {
+            mClipboardEnabled = sharedPreferences.getBoolean(
+                    PREF_CLIPBOARD, res.getBoolean(R.bool.default_clipboard_enable));
+            updateClipboardCapture();
+            updateClipboardMenuVisibility();
         }
 
         updateKeyboardOptions();
@@ -3284,6 +3516,11 @@ public class LatinIME extends InputMethodService implements
         }
         mEnableVoice = enableVoice;
         mVoiceOnPrimary = voiceOnPrimary;
+
+        mViTelexEnabled = sp.getBoolean(PREF_VI_TELEX, mResources
+                .getBoolean(R.bool.default_vi_telex));
+        mClipboardEnabled = sp.getBoolean(PREF_CLIPBOARD, mResources
+                .getBoolean(R.bool.default_clipboard_enable));
 
         mAutoCorrectEnabled = sp.getBoolean(PREF_AUTO_COMPLETE, mResources
                 .getBoolean(R.bool.enable_autocorrect))

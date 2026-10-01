@@ -35,9 +35,11 @@
     <bool name="default_recorrection_enabled">false</bool>
     <bool name="config_long_press_comma_for_settings_enabled">true</bool>
     <bool name="default_fullscreen_override">false</bool>
-    <bool name="default_force_keyboard_on">false</bool>
+    <bool name="default_force_keyboard_on">true</bool>
     <bool name="default_keyboard_notification">false</bool>
     <bool name="default_add_shift_to_popup">false</bool>
     <bool name="default_caps_lock">true</bool>
     <bool name="default_shift_lock_modifiers">true</bool>
+    <bool name="default_vi_telex">true</bool>
+    <bool name="default_clipboard_enable">true</bool>
 </resources>

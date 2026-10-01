@@ -109,6 +109,21 @@
     <!-- Description for auto completion -->
     <string name="auto_complete_summary">Spacebar and punctuation automatically insert highlighted word</string>
 
+    <!-- Clipboard history -->
+    <string name="clipboard">Clipboard</string>
+    <string name="clipboard_empty">Clipboard is empty. Copied text will appear here.</string>
+    <string name="clipboard_clear">Clear all</string>
+    <string name="clipboard_pin">Pin</string>
+    <string name="clipboard_unpin">Unpin</string>
+    <string name="clipboard_delete">Delete</string>
+    <string name="clipboard_enable_title">Clipboard history</string>
+    <string name="clipboard_enable_summary">Show a clipboard button on the suggestion strip and keep copy history</string>
+
+    <!-- Option to enable Vietnamese Telex input -->
+    <string name="vi_telex">Vietnamese Telex input</string>
+    <!-- Description for Vietnamese Telex input -->
+    <string name="vi_telex_summary">Applies only when the Vietnamese input language is selected. Type with Telex: aa=â, aw=ă, ow=ơ, dd=đ, s/f/r/x/j for tones</string>
+
     <!-- Option to show/hide the settings key -->
     <string name="prefs_settings_key">Show settings key</string>
     <!-- Array of the settings key mode values -->

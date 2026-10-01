@@ -288,11 +288,15 @@
             hackkbd:isSticky="true"
             hackkbd:isModifier="true" />
         <Key
+            hackkbd:codes="@integer/key_clipboard"
+            hackkbd:keyLabel="&#x1F4CB;"
+            hackkbd:isModifier="true" />
+        <Key
             hackkbd:codes="@integer/key_space"
             hackkbd:shiftLabel="@string/key_space_shift"
             hackkbd:keyIcon="@drawable/sym_keyboard_space"
             hackkbd:iconPreview="@drawable/sym_keyboard_feedback_space"
-            hackkbd:keyWidth="32.1428571372%p"
+            hackkbd:keyWidth="25%p"
             hackkbd:isModifier="true" />
         <Key
             hackkbd:codes="@integer/key_fn"

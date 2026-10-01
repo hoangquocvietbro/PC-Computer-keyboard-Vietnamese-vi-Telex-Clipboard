@@ -25,9 +25,11 @@ import android.os.Bundle;
 import android.text.Html;
 import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.TextView.BufferType;
@@ -94,6 +96,30 @@ public class Main extends Activity {
                 startActivityForResult(new Intent(that, LatinIMESettings.class), 0);
             }
         });
-    }    
+
+        // Force-show the soft keyboard when tapping the test input box,
+        // even when a hardware keyboard (or emulator keyboard) is attached
+        // and the system would otherwise suppress the soft input.
+        final EditText testBox = (EditText) findViewById(R.id.main_setup_edit_test);
+        testBox.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    v.requestFocus();
+                    final InputMethodManager mgr = (InputMethodManager)
+                            getSystemService(Context.INPUT_METHOD_SERVICE);
+                    mgr.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+                    // Retry once: the first call can lose to window-focus timing.
+                    v.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            mgr.showSoftInput(testBox, InputMethodManager.SHOW_IMPLICIT);
+                        }
+                    }, 150);
+                }
+                return false;
+            }
+        });
+    }
 }
 

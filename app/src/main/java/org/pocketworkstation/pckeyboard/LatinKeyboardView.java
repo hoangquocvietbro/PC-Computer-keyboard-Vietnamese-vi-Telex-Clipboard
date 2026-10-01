@@ -89,6 +89,7 @@ public class LatinKeyboardView extends LatinKeyboardBaseView {
     static final int KEYCODE_FKEY_F11 = -141;
     static final int KEYCODE_FKEY_F12 = -142;
     static final int KEYCODE_NUM_LOCK = -143;
+    static final int KEYCODE_CLIPBOARD = -130;
 
     private Keyboard mPhoneKeyboard;
 

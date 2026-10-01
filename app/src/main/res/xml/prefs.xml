@@ -258,6 +258,22 @@
             android:title="@string/title_suggested_punctuation"
             android:defaultValue="@string/suggested_punctuations"
             />
+
+        <CheckBoxPreference
+            android:key="vi_telex"
+            android:title="@string/vi_telex"
+            android:summary="@string/vi_telex_summary"
+            android:persistent="true"
+            android:defaultValue="@bool/default_vi_telex"
+            />
+
+        <CheckBoxPreference
+            android:key="clipboard_enable"
+            android:title="@string/clipboard_enable_title"
+            android:summary="@string/clipboard_enable_summary"
+            android:persistent="true"
+            android:defaultValue="@bool/default_clipboard_enable"
+            />
     </PreferenceCategory>
 
     <PreferenceCategory

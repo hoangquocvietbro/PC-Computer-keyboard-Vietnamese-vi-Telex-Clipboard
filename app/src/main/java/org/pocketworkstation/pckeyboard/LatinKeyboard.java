@@ -458,8 +458,8 @@ public class LatinKeyboard extends Keyboard {
         final float maxTextWidth = width - (arrowWidth + arrowWidth);
         final Rect bounds = new Rect();
 
-        // Estimate appropriate language name text size to fit in maxTextWidth.
-        String language = LanguageSwitcher.toTitleCase(locale.getDisplayLanguage(locale));
+        // Always show the short language code (e.g. "Vi") to fit narrow space bars.
+        String language = LanguageSwitcher.toTitleCase(locale.getLanguage());
         int textWidth = getTextWidth(paint, language, origTextSize, bounds);
         // Assuming text width and text size are proportional to each other.
         float textSize = origTextSize * Math.min(maxTextWidth / textWidth, 1.0f);

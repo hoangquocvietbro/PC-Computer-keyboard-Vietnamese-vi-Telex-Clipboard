@@ -26,6 +26,15 @@
         android:background="@drawable/keyboard_suggest_strip"
         >
 
+    <ImageButton
+        android:id="@+id/clipboard_menu_button"
+        android:layout_width="48dp"
+        android:layout_height="@dimen/candidate_strip_height"
+        android:background="?android:attr/selectableItemBackground"
+        android:src="@drawable/ic_clipboard_menu"
+        android:contentDescription="@string/clipboard"
+        />
+
     <org.pocketworkstation.pckeyboard.CandidateView
         android:id="@+id/candidates"
         android:layout_width="wrap_content"
@@ -34,5 +43,5 @@
         android:fadingEdge="horizontal"
         android:fadingEdgeLength="@dimen/candidate_strip_fading_edge_length"
         />
-        
+
 </LinearLayout>
